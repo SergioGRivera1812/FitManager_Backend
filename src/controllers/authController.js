@@ -38,6 +38,49 @@ exports.getMe = async (req, res, next) => {
   }
 };
 
+/**
+ * Crea un nuevo empleado (staff/recepcion) para el gimnasio del administrador.
+ * Toma el id_gimnasio del token del admin autenticado.
+ */
+exports.createStaff = async (req, res, next) => {
+  try {
+    const { nombre, email, password, rol } = req.body;
+
+    const user = await authService.createStaff({
+      nombre,
+      email,
+      password,
+      rol,
+      id_gimnasio: req.user.id_gimnasio // Forzamos el ID del gimnasio del token
+    });
+
+    const userData = user.toJSON();
+    delete userData.password;
+
+    res.status(201).json({
+      success: true,
+      data: userData
+    });
+  } catch (error) {
+    if (error.message.includes('ya está registrado')) {
+      return res.status(400).json({ success: false, error: error.message });
+    }
+    next(error);
+  }
+};
+
+/**
+ * Obtiene todos los usuarios del gimnasio del usuario autenticado.
+ */
+exports.getUsers = async (req, res, next) => {
+  try {
+    const users = await authService.getUsers(req.user.id_gimnasio);
+    res.status(200).json({ success: true, count: users.length, data: users });
+  } catch (error) {
+    next(error);
+  }
+};
+
 const sendTokenResponse = (user, statusCode, res) => {
   const token = authService.generateToken(user);
 

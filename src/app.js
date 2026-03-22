@@ -10,6 +10,7 @@ const membresiaRoutes = require('./routes/membresiaRoutes');
 const visitRoutes = require('./routes/visitRoutes');
 const errorHandler = require('./middlewares/errorHandler');
 const { protect } = require('./middlewares/authMiddleware');
+const paymentController = require('./controllers/paymentController');
 
 const app = express();
 
@@ -18,6 +19,10 @@ app.use(cors({
   origin: true,
   credentials: true
 }));
+
+// Webhook de Stripe (Debe ir antes de express.json())
+app.post('/api/payments/webhook', express.raw({ type: 'application/json' }), paymentController.stripeWebhook);
+
 app.use(express.json());
 app.use(cookieParser());
 

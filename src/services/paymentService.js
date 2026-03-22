@@ -26,15 +26,58 @@ class PaymentService {
     };
   }
 
-  async createStripeIntent(id_gimnasio, { id_miembro, id_membresia, monto }) {
+  async createStripeIntent(id_gimnasio, { id_miembro, id_membresia }) {
+    // 1. Validar que el miembro existe y pertenece al gimnasio
     const member = await Member.findOne({ where: { id_miembro, id_gimnasio } });
     if (!member) throw new Error('Miembro no encontrado');
 
+    // 2. BUSCAR LA MEMBRESÍA REAL (Seguridad: Usamos el precio de la DB, no del front)
+    const membresia = await Membresia.findOne({ where: { id_membresia, id_gimnasio } });
+    if (!membresia) throw new Error('Membresía no encontrada o no válida para este gimnasio');
+
+    // 3. CALCULAR FECHA DE VENCIMIENTO (Hoy + duración de la membresía)
+    const hoy = new Date();
+    const vencimiento = new Date();
+    vencimiento.setDate(hoy.getDate() + membresia.duracion_dias);
+    
+    // Formato YYYY-MM-DD para la base de datos
+    const fecha_vencimiento = vencimiento.toISOString().split('T')[0];
+
+    console.log(`[Stripe] Generando intento de pago: $${membresia.precio} para miembro #${id_miembro}. Vence: ${fecha_vencimiento}`);
+
+    // 4. Crear el intento en Stripe
     return await stripe.paymentIntents.create({
-      amount: Math.round(monto * 100),
+      amount: Math.round(membresia.precio * 100), // Stripe usa centavos
       currency: 'mxn',
-      metadata: { id_miembro, id_membresia, id_gimnasio }
+      metadata: { 
+        id_miembro, 
+        id_membresia, 
+        id_gimnasio,
+        monto: membresia.precio,
+        fecha_vencimiento // Se guarda para que el Webhook la use al confirmar
+      }
     });
+  }
+
+  /**
+   * Maneja el webhook de Stripe para automatizar la activación del miembro.
+   */
+  async handleStripeWebhook(event) {
+    if (event.type === 'payment_intent.succeeded') {
+      const intent = event.data.object;
+      const { id_miembro, id_membresia, id_gimnasio, monto, fecha_vencimiento } = intent.metadata;
+
+      console.log(`[Stripe Webhook] Pago exitoso para el miembro #${id_miembro} en el gimnasio #${id_gimnasio}`);
+
+      // Reutilizamos recordPayment para registrar el pago y activar al miembro
+      return await this.recordPayment(parseInt(id_gimnasio), {
+        id_miembro: parseInt(id_miembro),
+        id_membresia: parseInt(id_membresia),
+        monto: parseFloat(monto),
+        metodo_pago: 'tarjeta',
+        fecha_vencimiento: fecha_vencimiento
+      });
+    }
   }
 
   /**

@@ -1,5 +1,6 @@
 const Member = require('../models/Member');
 const Payment = require('../models/Payment');
+const sequelize = require('../config/database');
 
 /**
  * Servicio para gestionar la lógica de miembros
@@ -52,11 +53,39 @@ class MemberService {
     return member;
   }
 
-  async createMember(id_gimnasio, memberData) {
-    return await Member.create({
-      ...memberData,
-      id_gimnasio
-    });
+  /**
+   * Crea un miembro y opcionalmente su primer pago en una sola transacción.
+   */
+  async createMember(id_gimnasio, data) {
+    const { payment, ...memberData } = data;
+    const t = await sequelize.transaction();
+
+    try {
+      // 1. Si hay pago, el miembro nace 'activo', si no, nace 'vencido'
+      const estadoInitial = payment ? 'activo' : 'vencido';
+
+      const member = await Member.create({
+        ...memberData,
+        id_gimnasio,
+        estado: estadoInitial
+      }, { transaction: t });
+
+      // 2. Si se incluyeron datos de pago, registramos el pago vinculado
+      if (payment) {
+        await Payment.create({
+          ...payment,
+          id_miembro: member.id_miembro,
+          id_gimnasio
+        }, { transaction: t });
+      }
+
+      await t.commit();
+      return member;
+
+    } catch (error) {
+      await t.rollback();
+      throw error;
+    }
   }
 
   async updateMember(id_gimnasio, id_miembro, updateData) {

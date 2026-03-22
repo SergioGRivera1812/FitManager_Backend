@@ -1,4 +1,5 @@
 const memberService = require('../services/memberService');
+const paymentService = require('../services/paymentService');
 
 exports.getAllMembers = async (req, res, next) => {
   try {
@@ -26,7 +27,26 @@ exports.getMemberById = async (req, res, next) => {
 
 exports.createMember = async (req, res, next) => {
   try {
-    const member = await memberService.createMember(req.user.id_gimnasio, req.body);
+    const { id_membresia, metodo_pago, ...memberData } = req.body;
+    
+    // 1. Crear al miembro
+    const member = await memberService.createMember(req.user.id_gimnasio, memberData);
+
+    // 2. Si el pago es por tarjeta, generar el intento de Stripe
+    if (metodo_pago === 'tarjeta' && id_membresia) {
+      const intent = await paymentService.createStripeIntent(req.user.id_gimnasio, {
+        id_miembro: member.id_miembro,
+        id_membresia: id_membresia
+      });
+
+      return res.status(201).json({ 
+        success: true, 
+        data: member,
+        clientSecret: intent.client_secret // Este secreto lo usa el front para abrir Stripe
+      });
+    }
+
+    // 3. Si no es tarjeta, respuesta normal
     res.status(201).json({ success: true, data: member });
   } catch (error) {
     next(error);

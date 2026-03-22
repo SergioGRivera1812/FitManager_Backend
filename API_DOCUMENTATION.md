@@ -8,8 +8,9 @@
 
 ## 🔐 1. Autenticación (Auth)
 
-### Registro (Onboarding SaaS)
+### Registro Inicial (Onboarding SaaS)
 *   **POST** `/auth/register`
+*   **Descripción:** Crea un nuevo gimnasio y su usuario administrador inicial. No requiere token.
 *   **Body:**
     ```json
     {
@@ -17,6 +18,20 @@
       "email": "admin@gym.com",
       "password": "secret_password",
       "nombreGimnasio": "Laguna Fitness" 
+    }
+    ```
+
+### Crear Personal (Staff)
+*   **POST** `/auth/staff`
+*   **Protección:** Solo Admin (Requiere Token).
+*   **Descripción:** Crea un nuevo empleado o administrador para el gimnasio actual.
+*   **Body:**
+    ```json
+    {
+      "nombre": "User Name",
+      "email": "user@gym.com",
+      "password": "user_password",
+      "rol": "recepcion" // Opciones: "admin", "recepcion" (empleado)
     }
     ```
 
@@ -34,6 +49,14 @@
 ### Obtener Perfil (Me)
 *   **GET** `/auth/me`
 *   **Respuesta:** Datos del usuario autenticado y detalles de su gimnasio.
+
+### Logout
+*   **GET** `/auth/logout`
+*   **Descripción:** Limpia la cookie del token.
+
+### Listar Usuarios
+*   **GET** `/auth/users`
+*   **Descripción:** Lista todos los usuarios (staff/admin) del gimnasio actual.
 
 ---
 
@@ -74,11 +97,11 @@
 
 ### Listar Pagos (Paginado)
 *   **GET** `/payments?page=1&limit=10`
-*   **Respuesta:** Historial cronológico (DESC) con relaciones incluidas.
+*   **Respuesta:** Historial cronológico (DESC).
 
 ### Alertas de Vencidos
 *   **GET** `/payments/alerts`
-*   **Descripción:** Miembros cuya membresía ha expirado según la lógica de negocio.
+*   **Descripción:** Miembros cuya membresía ha expirado.
 
 ### Registrar Pago Manual (Efectivo/Transferencia)
 *   **POST** `/payments`
@@ -92,7 +115,6 @@
       "fecha_vencimiento": "2026-04-19"
     }
     ```
-*   **Nota:** Esta operación es transaccional; activa automáticamente al miembro.
 
 ### Crear Intento de Pago (Stripe)
 *   **POST** `/payments/create-intent`
@@ -105,6 +127,10 @@
     }
     ```
 *   **Respuesta:** `{"clientSecret": "pi_..."}`
+
+### Webhook de Stripe (Interno)
+*   **POST** `/payments/webhook`
+*   **Descripción:** Endpoint para recibir notificaciones automáticas de Stripe. Requiere firma de Stripe.
 
 ---
 
@@ -128,11 +154,43 @@
 
 ---
 
-## 📱 5. Notificaciones (WhatsApp)
+## 🕒 5. Visitas (Access Control)
+
+### Listar Visitas (Paginado)
+*   **GET** `/visitas?page=1&limit=20`
+
+### Estadísticas de Hoy
+*   **GET** `/visitas/stats/today`
+*   **Respuesta:**
+    ```json
+    {
+      "success": true,
+      "data": {
+        "hoy": 15,
+        "ultimaHora": 2,
+        "promedioDiario": 12
+      }
+    }
+    ```
+
+### Registrar Visita
+*   **POST** `/visitas`
+*   **Body:** 
+    ```json
+    { "id_miembro": 5 }
+    ```
+
+### Verificar Estado de Miembro (Check-in)
+*   **GET** `/visitas/check-status/:id`
+*   **Descripción:** Verifica si un miembro tiene membresía vigente antes de registrar la visita.
+
+---
+
+## 📱 6. Notificaciones (WhatsApp)
 
 ### Enviar Recordatorio
-*   **POST** `/notifications/send-reminder/:id_miembro`
-*   **Descripción:** Envía un mensaje predefinido vía WhatsApp Service.
+*   **POST** `/notifications/send-reminder/:id`
+*   **Descripción:** Envía un mensaje de recordatorio vía WhatsApp al miembro.
 
 ---
 
@@ -147,12 +205,11 @@ Todas las respuestas fallidas siguen este formato:
 ```
 *   **401:** No autorizado (Token faltante o expirado).
 *   **403:** Prohibido (El rol del usuario no tiene permisos para esta acción).
-*   **404:** No encontrado (El recurso no existe o pertenece a otro gimnasio - Seguridad SaaS).
+*   **404:** No encontrado (El recurso no existe o pertenece a otro gimnasio).
 *   **400:** Solicitud incorrecta (Faltan campos obligatorios o error de validación).
 
 ---
 
 ### 💡 Tips para el Frontend:
-1.  **JWT:** Inyecta el token en el header `Authorization: Bearer <token>` en cada petición.
-2.  **Paginación:** Utiliza los campos `totalPages` y `currentPage` para renderizar la navegación.
-3.  **Aislamiento:** El `id_gimnasio` es manejado internamente por el Backend; no es necesario enviarlo en los filtros del Front.
+1.  **JWT:** Inyecta el token en el header `Authorization: Bearer <token>` o como cookie.
+2.  **Multitenancy:** El `id_gimnasio` es manejado automáticamente por el servidor basándose en el usuario autenticado. No es necesario enviarlo en los payloads (excepto en `/auth/register`).

@@ -33,11 +33,11 @@ const Member = sequelize.define('Member', {
   }
 }, {
   tableName: 'miembros',
-  timestamps: true,
+  timestamps: false,
   createdAt: 'fecha_registro',
   updatedAt: 'updated_at',
   deletedAt: 'deleted_at',
-  paranoid: true,
+  paranoid: false,
 });
 
 module.exports = Member;
